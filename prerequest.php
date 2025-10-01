@@ -1,5 +1,7 @@
 <?php 
 
+// This is called after NPC profile is loaded.
+
 require_once(__DIR__."/common.php");
 
 
@@ -20,8 +22,8 @@ if (!isset($intimacyStatus["level"]))
     $intimacyStatus["level"]=0;
 
 // Process AIAgentNSFW events
-
 processInfoSexScene();
+
 // Reload
 $intimacyStatus=getIntimacyForActor($GLOBALS["HERIKA_NAME"]);
 
@@ -33,6 +35,7 @@ if ($codeName=="the_narrator") {
 
 // From here should apply to profiled actors
 
+// Disposal modifiers per iteration
 // Every iteration we lower sex_disposal by 1
 if (isset($intimacyStatus["sex_disposal"])) {
     if ($intimacyStatus["sex_disposal"]>0) {
@@ -63,12 +66,14 @@ if (isset($GLOBALS["AIAGENT_NSFW_IS_PROSTITUTE"]) && $GLOBALS["AIAGENT_NSFW_IS_P
 
 }
 
+// Slaves always have sex disposal over 19
 
 if (isset($GLOBALS["AIAGENT_NSFW_IS_SLAVE"]) && $GLOBALS["AIAGENT_NSFW_IS_SLAVE"]) {    // Need npc table with tags here
     $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<20)?20: $intimacyStatus["sex_disposal"];
 
 }
 
+// If current task is relax we increase sex disposal every itteration
 $currentTask=DataGetCurrentTask();
 if (strpos($currentTask,"relax")!==false) {
     $intimacyStatus["sex_disposal"]+=2;
@@ -93,7 +98,7 @@ if ($intimacyStatus["level"]>0) {
 } else
     unset($GLOBALS["FORCE_MOOD"]);
 
-
+// Fallback, if chatnf_sl, then we're on a intimate scene
 if ($gameRequest[0]=="chatnf_sl") {    
 
     if ($intimacyStatus["level"]!=2) {
@@ -103,6 +108,7 @@ if ($gameRequest[0]=="chatnf_sl") {
 
 }
 
+// Set intimate prompts
 if ($intimacyStatus["level"]>0) {
     error_log("AIAGENTNSFW] Changing PROMPTS");
     setSexPrompt($GLOBALS["HERIKA_NAME"]);
@@ -113,6 +119,7 @@ updateIntimacyForActor($GLOBALS["HERIKA_NAME"],$intimacyStatus);
 
 // Add hook  to XTTS to insert some oh's and ah's into the speech.
 // Also will change XTTS settings
+// If level 2 -> Intimate scene, NPC should talk slower, and we add some random gasps.
 
 if ($intimacyStatus["level"]==2) {
     error_log("Adding XTTS hook {$intimacyStatus["level"]}");
@@ -142,6 +149,7 @@ if ($intimacyStatus["level"]==2) {
     };
 }
 
+// If level 1 -> Pre intimate scene, NPC should talk slower.
 if ($intimacyStatus["level"]==1) {
     error_log("Adding XTTS hook {$intimacyStatus["level"]}");
     $GLOBALS["HOOKS"]["XTTS_TEXTMODIFIER"][]=function($text) {

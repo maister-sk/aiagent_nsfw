@@ -1,6 +1,7 @@
 <?php 
 
 // Current historic context data here. $GLOBALS["CONTEXT_BUILDING_DATA"]
+// This is called when build NPC context, we can filter here our custom eventypes
 
 
 

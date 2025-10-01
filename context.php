@@ -1,27 +1,16 @@
 <?php 
 
-if (isset($GLOBALS["AIAGENTNSFW_FORCE_STOP"]) &&  $GLOBALS["AIAGENTNSFW_FORCE_STOP"]) {
+// This is called when NPC context is built, before funrect handling
 
-  
+if (isset($GLOBALS["AIAGENTNSFW_FORCE_STOP"]) &&  $GLOBALS["AIAGENTNSFW_FORCE_STOP"]) {
 
     if ($gameRequest[0]=="ext_nsfw_action") {    // This was changed by processInfoSexScene
 
         $actor=$GLOBALS["HERIKA_NAME"];
         $intimacyStatus=getIntimacyForActor($actor);
         if (!isset($intimacyStatus["orgasm_generated"]) || $intimacyStatus["orgasm_generated"]==false) {
-            
-            error_log("Generating gasped orgasm sound");
-    
-            $original_speech="I'm coming! ... ... ... Oh....Gods ... Volkur...that was amazing....";
-            $sourceaudio="/opt/ai/debian-stable/opt/ai/seed-vc/gasper/Malryn_I_m_coming_Oh_Gods_Volkur.wav";
-            $moan="";
-    
-            //function gasper($original_speech,$moan,$sourceaudio,$sourcevoiceaudio) {
-    
-            gasper($original_speech,$moan,$sourceaudio,"/opt/ai/debian-stable/opt/ai/seed-vc/gasper/femaleyoungeager.wav");
-    
-            $intimacyStatus["orgasm_generated"]=true;
-            updateIntimacyForActor($actor,$intimacyStatus);
+            generateClimaxSpeech();
+           
         } else {
             error_log("Orgams sound already generated");
 
@@ -44,6 +33,9 @@ if (isset($GLOBALS["AIAGENTNSFW_FORCE_STOP"]) &&  $GLOBALS["AIAGENTNSFW_FORCE_ST
 
 }
 
+
+// Minor change son context for special cases.
+
 if ($GLOBALS["gameRequest"][0]=="chatnf_sl_end") {
   
     $GLOBALS["PATCH_PROMPT_ENFORCE_ACTIONS"]=false;
@@ -58,6 +50,9 @@ if ($GLOBALS["gameRequest"][0]=="chatnf_sl") {
     array_pop($GLOBALS["contextDataFull"]);
 
 }
+
+
+// Drunk status handling
 
 $actorName=$GLOBALS["HERIKA_NAME"];
 $npcManager=new NpcMaster();
@@ -81,7 +76,7 @@ if (in_array(getLastIssuedMood($GLOBALS["HERIKA_NAME"],$GLOBALS["gameRequest"][2
 $npcData=$npcManager->setExtendedData($npcData,$extended_data);
 $npcManager->updateByArray($npcData);
 
-
+// Add note if player is naked
 if (playerIsNaked()) {
     error_log("[AIAGENTNSFW] Player is naked");
     $GLOBALS["contextDataFull"][0]["content"].="\n#Note: {$GLOBALS["PLAYER_NAME"]} is nude, not wearing clothes\n";

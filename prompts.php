@@ -1,0 +1,44 @@
+<?php 
+
+$GLOBALS["PROMPTS"]["chatnf_sl"]=
+[
+    "cue"=>[
+        "(Focus on intimate scene participants,moans and gasps,SHORT speech, explicit words) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(Focus on intimate scene description,moans and gasps,SHORT speech, explicit words) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(explain pleasure,moans and gasps,SHORT speech, explicit words) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(give a compliment,moans and gasps,SHORT speech, explicit words) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(moans and gasps,short speech, explicit words) {$GLOBALS["TEMPLATE_DIALOG"]}"
+    ], // give way to
+    "player_request"=>["The Narrator: "]  //requirement
+];
+
+$GLOBALS["PROMPTS"]["chatnf_sl_nr"]=
+[
+    "cue"=>[
+        "(Focus on intimate scene participants) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(Focus on scene description) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(explain pleasure) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(give a compliment) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(moans and gasps) {$GLOBALS["TEMPLATE_DIALOG"]}"
+    ], // give way to
+    "player_request"=>[$GLOBALS["gameRequest"][3]]  //requirement
+];
+
+$GLOBALS["PROMPTS"]["chatnf_sl_climax"]=
+[
+    "cue"=>["({$GLOBALS["HERIKA_NAME"]} is orgasming!!!! CLIMAX!, Focus on intimate scene participants, {$GLOBALS["HERIKA_NAME"]} SHOUTS using moans and groans )  VERY SHORT sentence (3 words) {$GLOBALS["TEMPLATE_DIALOG"]}"], // give way to
+    "player_request"=>"YEEAH!"  //requirement
+];
+
+// player_request prompt will be overwrriten
+$GLOBALS["PROMPTS"]["chatnf_sl_end"]=
+[
+    "cue"=>[
+        "(Talk about intimate scene result) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(Talk about best moment) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "(Talk about something people usually talks after sex) {$GLOBALS["TEMPLATE_DIALOG"]}",
+    ]
+];
+
+
+?>

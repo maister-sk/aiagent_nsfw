@@ -117,11 +117,6 @@ function processInfoSexScene()
                 echo "{$actor}|ScriptQueue|" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "////" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "\r\n";
             }
 
-            // New generation
-            //$GLOBALS["AIAGENT_NSFW"]["USE_GASP"]=false;
-            //$sourceaudio=$GLOBALS["ENGINE_PATH"]."/data/voices/{$GLOBALS["TTS"]["XTTSFASTAPI"]["voiceid"]}.wav";
-            //$finalSpeechText=gasper($original_speech,$moan,$generatedFile,$sourceaudio);
-
             $intimacyStatus["orgasm_generated"]               = false;
             $intimacyStatus["orgasm_generated_text"]          = "";
             $intimacyStatus["orgasm_generated_text_original"] = "";
@@ -129,6 +124,8 @@ function processInfoSexScene()
             updateIntimacyForActor($actor, $intimacyStatus);
             terminate();
 
+        } else {
+            // NPC will generate response via standard prompt
         }
 
     } else if ($gameRequest[0] == "chatnf_sl_moan") {
@@ -147,6 +144,7 @@ function processInfoSexScene()
 
         }
 
+        //logEvent($GLOBALS["gameRequest"]); Don't log, chat will do
         terminate();
 
     } else if ($gameRequest[0] == "ext_nsfw_action") {
@@ -204,7 +202,7 @@ function setSexSpeechStyle($actorName)
     }
 
     if (isset($extended["sex_speech_style"]) && ! empty($extended["sex_speech_style"])) {
-        $GLOBALS["HERIKA_SPEECHSTYLE"] .= "\n" . $extended["sex_speech_style"];
+        $GLOBALS["HERIKA_SPEECHSTYLE"] .= "\n#Sex Expressions\n" . $extended["sex_speech_style"];
 
     }
 }
@@ -230,7 +228,7 @@ function setSexPrompt($actorName)
     }
 
     if (isset($extended["sex_prompt"]) && ! empty($extended["sex_prompt"])) {
-        $GLOBALS["HERIKA_PERSONALITY"] .= "\n" . $extended["sex_prompt"];
+        $GLOBALS["HERIKA_PERSONALITY"] .= "\n#Personality (sex scenes)\n" . $extended["sex_prompt"];
 
     }
 }
@@ -626,8 +624,8 @@ function generateClimaxSpeech() {
 		$partyConfA=json_decode($partyConf,true);
 		Logger::debug($partyConf);
 		// Use the global DYNAMIC_PROMPT
-        $updateProfilePrompt = "Write a VERY SHORT sentence (3 words) for {$GLOBALS["HERIKA_NAME"]} 
-        to say when she/he reaches Climax based on Dialogue history, and {$GLOBALS["PLAYER_NAME"]} requests,stuttering";
+        $updateProfilePrompt = "Write a VERY SHORT sentence (3/4 words) for {$GLOBALS["HERIKA_NAME"]} 
+        to say when she/he reaches Climax based on Dialogue history, and {$GLOBALS["PLAYER_NAME"]} requests,stuttering. Read  {$GLOBALS["HERIKA_NAME"]} character sheet to figure out her sexual preferences.";
 		// Database Prompt (Dynamic Profile Head)    
 		$head[]   = ["role"	=> "system", "content"	=> "You are an NSFW writer.  ", ];
 		

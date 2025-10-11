@@ -212,7 +212,63 @@ $GLOBALS["FUNCRET"]["ExtCmdStartBlowJob"]=function() {
         
         $intimacyStatus=getIntimacyForActor($actorName);
         $intimacyStatus["sex_disposal"]+=15;
-        $intimacyStatus["level"]=1;
+        $intimacyStatus["level"]=2;
+        updateIntimacyForActor($actorName,$intimacyStatus);
+
+    }
+
+    $GLOBALS["AVOID_LLM_CALL"]=true; // Don't speak
+};
+
+
+/******
+ExtCmdStartAnalSex
+******/
+
+$GLOBALS["F_NAMES"]["ExtCmdStartAnalSex"]="StartAnalSex";                           
+$GLOBALS["F_TRANSLATIONS"]["ExtCmdStartAnalSex"]="{$GLOBALS["HERIKA_NAME"]} starts an intimate scene with another actor, anal sex";
+$GLOBALS["FUNCTIONS"][] =
+[
+    "name" => $GLOBALS["F_NAMES"]["ExtCmdStartAnalSex"],
+    "description" => $GLOBALS["F_TRANSLATIONS"]["ExtCmdStartAnalSex"],
+    "parameters" => [
+        "type" => "object",
+        "properties" => [
+            "target" => [
+                "type" => "string",
+                "description" => "Target NPC, Actor, or being",
+            ]
+        ],
+        "required" => ["target"],
+    ]
+]
+;
+
+
+$GLOBALS["FUNCRET"]["ExtCmdStartAnalSex"]=function() {
+    global $gameRequest,$returnFunction,$db,$request;
+    // Probably we want to execute something, and put return value in $returnFunction[3] and $gameRequest[3];
+    // We could overwrite also $request.
+    error_log("Running ExtCmdStartAnalSex FUNCRET");
+  
+    // Participants
+    $functionCallRet = explode("@", $gameRequest[3]); // Function returns here
+    // Update intimacy status for al lparticipants
+
+    // Actor who issued command
+    $actors[]=npcNameToCodename($GLOBALS["HERIKA_NAME"]);;
+    $actorList=explode(",",$functionCallRet[2]);
+    foreach($actorList as $actor) {
+        if (trim($actor)!=$GLOBALS["PLAYER_NAME"])
+            $actors[]=($actor);
+
+    }
+
+    foreach ($actors as $actorName) {
+        
+        $intimacyStatus=getIntimacyForActor($actorName);
+        $intimacyStatus["sex_disposal"]+=15;
+        $intimacyStatus["level"]=2;
         updateIntimacyForActor($actorName,$intimacyStatus);
 
     }
@@ -336,6 +392,63 @@ $GLOBALS["FUNCRET"]["ExtCmdStartThreesome"]=function() {
 ExtCmdStartTitfuck
 ******/
 
+$GLOBALS["F_NAMES"]["ExtCmdStartHandJobSex"]="Masturbate";                           
+$GLOBALS["F_TRANSLATIONS"]["ExtCmdStartHandJobSex"]="{$GLOBALS["HERIKA_NAME"]} masturbates target";
+$GLOBALS["FUNCTIONS"][] =
+[
+    "name" => $GLOBALS["F_NAMES"]["ExtCmdStartHandJobSex"],
+    "description" => $GLOBALS["F_TRANSLATIONS"]["ExtCmdStartHandJobSex"],
+    "parameters" => [
+        "type" => "object",
+        "properties" => [
+            "target" => [
+                "type" => "string",
+                "description" => "Target NPC, Actor, or being",
+            ]
+        ],
+        "required" => ["target"],
+    ]
+]
+;
+
+
+$GLOBALS["FUNCRET"]["ExtCmdStartHandJobSex"]=function() {
+    global $gameRequest,$returnFunction,$db,$request;
+    // Probably we want to execute something, and put return value in $returnFunction[3] and $gameRequest[3];
+    // We could overwrite also $request.
+    error_log("Running ExtCmdStartHandJobSex FUNCRET");
+
+    // Participants
+    $functionCallRet = explode("@", $gameRequest[3]); // Function returns here
+    // Update intimacy status for al lparticipants
+
+    // Actor who issued command
+    $actors[]=npcNameToCodename($GLOBALS["HERIKA_NAME"]);;
+    $actorList=explode(",",$functionCallRet[2]);
+    foreach($actorList as $actor) {
+        if (trim($actor)!=$GLOBALS["PLAYER_NAME"])
+            $actors[]=($actor);
+
+    }
+
+    foreach ($actors as $actorName) {
+        
+        $intimacyStatus=getIntimacyForActor($actorName);
+        $intimacyStatus["sex_disposal"]+=15;
+        $intimacyStatus["level"]=1;
+        updateIntimacyForActor($actorName,$intimacyStatus);
+
+    }
+    
+    
+    $GLOBALS["AVOID_LLM_CALL"]=false;
+
+};
+
+/******
+ExtCmdStartTitfuck
+******/
+
 $GLOBALS["F_NAMES"]["ExtCmdStartTitfuck"]="StartBoobjob";                           
 $GLOBALS["F_TRANSLATIONS"]["ExtCmdStartTitfuck"]="{$GLOBALS["HERIKA_NAME"]} starts a sex scene using her breasts. (aka  Titfuck,boobjob,titjob,paizuri ) (put partner in target poperty)";
 $GLOBALS["FUNCTIONS"][] =
@@ -425,7 +538,7 @@ $GLOBALS["FUNCRET"]["ExtCmdStartSelfMasturbation"]=function() {
     $intimacyStatus["level"]=1;
     updateIntimacyForActor($GLOBALS["HERIKA_NAME"],$intimacyStatus);    
 
-    $GLOBALS["AVOID_LLM_CALL"]=true;
+    $GLOBALS["AVOID_LLM_CALL"]=false;
 
 };
 
@@ -750,6 +863,10 @@ $GLOBALS["COOLDOWNMAP"]["ExtCmdKiss"]=100/0.00864;
 $GLOBALS["COOLDOWNMAP"]["ExtCdmHug"]=300/0.00864;
 $GLOBALS["COOLDOWNMAP"]["ExtCmdSexCommand"]=15/0.00864;
 $GLOBALS["COOLDOWNMAP"]["ExtCmdConsumeSoul"]=300/0.00864;
+$GLOBALS["COOLDOWNMAP"]["ExtCmdStartAnalSex"]=300/0.00864;
+$GLOBALS["COOLDOWNMAP"]["ExtCmdStartHandJobSex"]=300/0.00864;
+
+
 
 
 if (isset($GLOBALS["gameRequest"]) && $GLOBALS["gameRequest"][0]!="instruction" && $GLOBALS["gameRequest"][0]!="funcret") {
@@ -768,12 +885,16 @@ if (isset($GLOBALS["gameRequest"]) && $GLOBALS["gameRequest"][0]!="instruction" 
             if ($intimacyStatus["sex_disposal"]>=10) {
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartMassage";
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartSelfMasturbation";
+                $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartHandJobSex";
+
             }
             if ($intimacyStatus["sex_disposal"]>=20) {
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartBlowJob";
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartSex";
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartThreesome";
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartTitfuck";
+                $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartAnalSex";
+
             }
             /*if (isset($intimacyStatus["is_naked"]) && $intimacyStatus["is_naked"]>1  ) {
                 $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdPutOnClothes";
@@ -804,11 +925,14 @@ if (isset($GLOBALS["gameRequest"]) && $GLOBALS["gameRequest"][0]!="instruction" 
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartSelfMasturbation";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartBlowJob";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartSex";
+    $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartAnalSex";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartThreesome";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartTitfuck";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdHug";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdPutOnClothes";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdConsumeSoul";
+    $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartHandJobSex";
+
     error_log("[AIAGENTNSFW] All functions available");
 }
 

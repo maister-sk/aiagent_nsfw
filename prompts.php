@@ -40,5 +40,9 @@ $GLOBALS["PROMPTS"]["chatnf_sl_end"]=
     ]
 ];
 
+// ExtCmdStartSelfMasturbation will generate a LLM call.
 
+$GLOBALS["PROMPTS"]["afterfunc"]["cue"]["ExtCmdStartSelfMasturbation"]="{$GLOBALS["HERIKA_NAME"]} moans about being aroused, and starts self masturbation. {$GLOBALS["TEMPLATE_DIALOG"]}";
+
+ 
 ?>

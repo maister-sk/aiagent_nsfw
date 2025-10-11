@@ -54,22 +54,41 @@ if (isset($intimacyStatus["sex_disposal"])) {
 
 }
 
-// Prostitutes always have sex disposal over 19
-if (strpos($GLOBALS["HERIKA_PERS"],"is a prostitute")!==false) {    // Need npc table with tags here
-    $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<20)?20: $intimacyStatus["sex_disposal"];
+$actorName=$GLOBALS["HERIKA_NAME"];
+$npcManager=new NpcMaster();
+$npcData=$npcManager->getByName($actorName);
+$extended_data=$npcManager->getExtendedData($npcData);
+$metadata=$npcManager->getMetadata($npcData);
 
+
+// Detect 
+$modsToCheck=[
+    "The Naked DragonSSE.esp",
+    "prostitutes.esp"
+];
+
+$isCourtesan=false;
+if (is_array($metadata["mods"])) {
+    foreach ($modsToCheck as $mod) {
+        $isCourtesan=$isCourtesan||in_array($mod,$metadata["mods"]);
+    }
 }
 
-// Prostitutes always have sex disposal over 19
-if (isset($GLOBALS["AIAGENT_NSFW_IS_PROSTITUTE"]) && $GLOBALS["AIAGENT_NSFW_IS_PROSTITUTE"]) {    // Need npc table with tags here
-    $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<20)?20: $intimacyStatus["sex_disposal"];
 
+// Prostitutes always have sex disposal over 19
+if ($isCourtesan) {    // Need npc table with tags here
+    $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<20)?20: $intimacyStatus["sex_disposal"];
+    $intimacyStatus["adult_entertainment_services_autodetected"]=true;
+
+} else {
+    $intimacyStatus["adult_entertainment_services_autodetected"]=false;
 }
 
-// Slaves always have sex disposal over 19
 
-if (isset($GLOBALS["AIAGENT_NSFW_IS_SLAVE"]) && $GLOBALS["AIAGENT_NSFW_IS_SLAVE"]) {    // Need npc table with tags here
-    $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<20)?20: $intimacyStatus["sex_disposal"];
+// Arousal from NPC data or profile.
+
+if (isset($GLOBALS["AIAGENT_NSFW_DEFAULT_AROUSAL"]) && $GLOBALS["AIAGENT_NSFW_DEFAULT_AROUSAL"]) {    // Need npc table with tags here
+    $intimacyStatus["sex_disposal"]=($intimacyStatus["sex_disposal"]<$GLOBALS["AIAGENT_NSFW_DEFAULT_AROUSAL"])?$GLOBALS["AIAGENT_NSFW_DEFAULT_AROUSAL"]: $intimacyStatus["sex_disposal"];
 
 }
 
@@ -77,13 +96,13 @@ if (isset($GLOBALS["AIAGENT_NSFW_IS_SLAVE"]) && $GLOBALS["AIAGENT_NSFW_IS_SLAVE"
 $currentTask=DataGetCurrentTask();
 if (strpos($currentTask,"relax")!==false) {
     $intimacyStatus["sex_disposal"]+=2;
-    error_log("Increasing sex_disposal {$intimacyStatus["sex_disposal"]}");
+    error_log("Increasing sex_disposal {$intimacyStatus["sex_disposal"]} because relax mode");
 }
 
 // Speech mood modifier
 
 $moodModif=getSexDisposalFromMood($GLOBALS["HERIKA_NAME"],$GLOBALS["gameRequest"][2]);
-if ($moodModif>0.5) 
+if ($moodModif>0.45) 
     $intimacyStatus["sex_disposal"]+=2;
 else if ($moodModif<0) 
     $intimacyStatus["sex_disposal"]-=2;
@@ -91,7 +110,6 @@ else if ($moodModif<0)
 
 // Force mood if level>0, this forces XTTS to hook audio modifier. Should only be 1 when nsfw scene
 if ($intimacyStatus["level"]>0) {
-    $GLOBALS["FEATURES"]["MEMORY_EMBEDDING"]["ENABLED"]=false;  // Dont use memory while sex
     $GLOBALS["FORCE_MOOD"]="sexy";
 
 
@@ -104,6 +122,7 @@ if ($gameRequest[0]=="chatnf_sl") {
     if ($intimacyStatus["level"]!=2) {
         // In case we miss the event
         $intimacyStatus["level"]=2;
+        $intimacyStatus["sex_disposal"]=11;
     }
 
 }

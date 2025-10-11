@@ -3,7 +3,7 @@
 // Postrequest tasks.
 // Generate climax sentence if not generated.
 
-if ($gameRequest[0]=="chatnf_sl"||$gameRequest[0]=="chatnf_sl") {    
+if ($gameRequest[0]=="chatnf_sl"||$gameRequest[0]=="chatnf_sl_climax") {    
 
    
     // Check if already generated

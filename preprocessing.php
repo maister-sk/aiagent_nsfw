@@ -3,7 +3,7 @@
 // This is called at the very beginning, before any context is created
 // Add info_sexscene to external_fast_commands for non-locking processing
 
-$GLOBALS["external_fast_commands"][]="info_sexscene";
+$GLOBALS["external_fast_commands"][]="ext_nsfw_sexcene";
 
 require_once(__DIR__."/common.php");
 

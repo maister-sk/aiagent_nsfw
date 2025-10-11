@@ -58,7 +58,7 @@ function processInfoSexScene()
 
         // Fill descriptions
 
-        $sceneDescription = findRowByFirstColumn(__DIR__ . "/ostim.csv", $sexStageName);
+        $sceneDescription = findRowByFirstColumn(__DIR__ . "/scene_descriptions.csv", $sexStageName);
         if (! $sceneDescription) {
             $sceneDescription = "{actor0},{actor1},{actor2},{actor3},{actor4} are having an intimate moment";
         }

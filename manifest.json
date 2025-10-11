@@ -1,5 +1,9 @@
 {
     "name":"AIAgent NSFW",
     "description":"OStim integration. Extended intimacy actions",
-    "version":"0.1.0"
+    "version":"0.0.1",
+    "git_repo": "maister-sk/aiagent_nsfw",
+    "schema_version": 2,
+    "config_url": "",
+    "config_url_target": "_blank"
 }

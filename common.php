@@ -109,12 +109,16 @@ function processInfoSexScene()
             // We have used GASP. Let's use it.
 
             //echo "{$actor}|ScriptQueue|".trim(unmoodSentence($intimacyStatus["orgasm_generated_text"]))."////\r\n";
+            
+            // We force here the response.
 
             if ($GLOBALS["AIAGENT_NSFW"]["USE_GASP"]) {
                 echo "{$actor}|ScriptQueue|" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "////" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text"])) . "\r\n";
+                error_log("[AIAGENT-NSFW] Climax from orgasm_generated_text_original");
             } else {
                 echo "{$actor}|ScriptQueue|" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text"])) . "////" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text"])) . "\r\n";
-                echo "{$actor}|ScriptQueue|" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "////" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "\r\n";
+                error_log("[AIAGENT-NSFW] Climax from orgasm_generated_text");
+                //echo "{$actor}|ScriptQueue|" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "////" . trim(unmoodSentence($intimacyStatus["orgasm_generated_text_original"])) . "\r\n";
             }
 
             $intimacyStatus["orgasm_generated"]               = false;
@@ -122,10 +126,15 @@ function processInfoSexScene()
             $intimacyStatus["orgasm_generated_text_original"] = "";
 
             updateIntimacyForActor($actor, $intimacyStatus);
+            $GLOBALS["gameRequest"][0]="infaction";
+            $GLOBALS["gameRequest"][3]="$actor had an orgasm";
+            logEvent($GLOBALS["gameRequest"]);
+
             terminate();
 
         } else {
             // NPC will generate response via standard prompt
+            error_log("[AIAGENT-NSFW] Climax from llm_request should happend");
         }
 
     } else if ($gameRequest[0] == "chatnf_sl_moan") {
@@ -134,11 +143,11 @@ function processInfoSexScene()
         $moan        = $randomMoans[array_rand($randomMoans)];
         returnLines([$moan]);
 
-        $actor=$GLOBALS["HERIKA_NAME"];
-        $intimacyStatus=getIntimacyForActor($actor);
-        if (!isset($intimacyStatus["orgasm_generated"]) || $intimacyStatus["orgasm_generated"]==false) {
+        $actor          = $GLOBALS["HERIKA_NAME"];
+        $intimacyStatus = getIntimacyForActor($actor);
+        if (! isset($intimacyStatus["orgasm_generated"]) || $intimacyStatus["orgasm_generated"] == false) {
             generateClimaxSpeech();
-        
+
         } else {
             error_log("Orgams sound already generated");
 
@@ -156,6 +165,41 @@ function processInfoSexScene()
 
     }
 
+}
+
+function processInfoFertility()
+{
+    global $gameRequest;
+
+    if ($gameRequest[0] == "fertility_notification") {
+        $actor = $GLOBALS["HERIKA_NAME"];
+
+        $npcManager = new NpcMaster();
+        $npcData    = $npcManager->getByName($actor);
+
+        if (! $npcData) {
+            $npcData = $npcManager->getByName(ucFirst(strtolower($actor)));
+        }
+        $extended = json_decode($npcData["extended_data"], true);
+
+        $subCmd = explode("@", $gameRequest[3]);
+        if ($subCmd[1] == "pregnant") {
+            $extended["fertility_is_pregnant"] = true;
+        } else if ($subCmd[1] == "aborted") {
+            $extended["fertility_is_pregnant"] = false;
+        } else if ($subCmd[1] == "birth") {
+            $extended["fertility_is_pregnant"] = false;
+        }
+
+        $npcData["extended_data"] = json_encode($extended);
+        $npcData["gamets_last_updated"]=$gameRequest[2];
+        $npcManager->updateByArray($npcData);
+
+        $gameRequest[0]="info";
+        logEvent($gameRequest);
+        terminate();
+    }
+    
 }
 
 function getIntimacyForActor($actorName)
@@ -235,6 +279,10 @@ function setSexPrompt($actorName)
 
 function updateIntimacyForActor($actorName, $idata)
 {
+
+    if ($actorName == $GLOBALS["PLAYER_NAME"]) {
+        return;
+    }
 
     error_log("[AIAGENTNSFW] Updating intimacy for $actorName. " . json_encode($idata));
 
@@ -405,6 +453,28 @@ function getLastIssuedMood($actorName, $currentGamets, $timeFrameLimit = 5)
 
 function findRowByFirstColumn($filePath, $searchValue)
 {
+    $trlField="a.description";
+    
+    if (isset($GLOBALS["CORE_LANG"])&&!empty($GLOBALS["CORE_LANG"])) {
+        if ($GLOBALS["CORE_LANG"]=="es") {
+            $trlField="COALESCE(a.description_es,a.description)";
+        }
+    } 
+
+    $desc=$GLOBALS["db"]->fetchOne("SELECT a.*,$trlField  as final_desc FROM public.ext_aiagentnsfw_scenes a where stage ilike '$searchValue'");
+    if (isset($desc["final_desc"])) {
+        error_log("Found description for $searchValue!");
+        return strtolower($desc["final_desc"]);
+    }
+
+    // Insert for further description
+    $desc=$GLOBALS["db"]->insert("public.ext_aiagentnsfw_scenes",["stage"=>$searchValue]);
+
+    return null; // No match found
+}
+
+function findRowByFirstColumnOld($filePath, $searchValue)
+{
     if (($fh = fopen($filePath, 'r')) === false) {
         return null;
     }
@@ -562,83 +632,82 @@ function playerIsNaked()
     return false;
 }
 
+function generateClimaxSpeech()
+{
 
-function generateClimaxSpeech() {
-
-    $actor=$GLOBALS["HERIKA_NAME"];
-    $intimacyStatus=getIntimacyForActor($actor);
+    $actor          = $GLOBALS["HERIKA_NAME"];
+    $intimacyStatus = getIntimacyForActor($actor);
 
     error_log("[GASP] $actor");
 
-    if (!isset($intimacyStatus["orgasm_generated"]) || $intimacyStatus["orgasm_generated"]==false) {
-        
+    if (! isset($intimacyStatus["orgasm_generated"]) || $intimacyStatus["orgasm_generated"] == false) {
+
         error_log("Generating gasped orgasm sound");
-        
-        
-        $historyData="";
-        $lastPlace="";
-        $lastListener="";
+
+        $historyData  = "";
+        $lastPlace    = "";
+        $lastListener = "";
         $lastDateTime = "";
 
-        // Determine how much context history to use for dynamic profiles
+                                            // Determine how much context history to use for dynamic profiles
         $dynamicProfileContextHistory = 50; // Default value
         if (isset($GLOBALS["CONTEXT_HISTORY_DYNAMIC_PROFILE"]) && $GLOBALS["CONTEXT_HISTORY_DYNAMIC_PROFILE"] > 0) {
             $dynamicProfileContextHistory = $GLOBALS["CONTEXT_HISTORY_DYNAMIC_PROFILE"];
         } elseif (isset($GLOBALS["CONTEXT_HISTORY"]) && $GLOBALS["CONTEXT_HISTORY"] > 0) {
             $dynamicProfileContextHistory = $GLOBALS["CONTEXT_HISTORY"];
         }
-        
-        foreach (json_decode(DataSpeechJournal($GLOBALS["HERIKA_NAME"], $dynamicProfileContextHistory),true) as $element) {
-          if ($element["listener"]=="The Narrator") {
+
+        foreach (json_decode(DataSpeechJournal($GLOBALS["HERIKA_NAME"], $dynamicProfileContextHistory), true) as $element) {
+            if ($element["listener"] == "The Narrator") {
                 continue;
-          }
-          if ($lastListener!=$element["listener"]) {
-            
-            $listener=" (talking to {$element["listener"]})";
-            $lastListener=$element["listener"];
-          }
-          else
-            $listener="";
-      
-          if ($lastPlace!=$element["location"]){
-            $place=" (at {$element["location"]})";
-            $lastPlace=$element["location"];
-          }
-          else
-            $place="";
+            }
+            if ($lastListener != $element["listener"]) {
+
+                $listener     = " (talking to {$element["listener"]})";
+                $lastListener = $element["listener"];
+            } else {
+                $listener = "";
+            }
+
+            if ($lastPlace != $element["location"]) {
+                $place     = " (at {$element["location"]})";
+                $lastPlace = $element["location"];
+            } else {
+                $place = "";
+            }
 
             if ($lastDateTime != substr($element["sk_date"], 0, 15)) {
-                $date = substr($element["sk_date"], 0, 10);
-                $time = substr($element["sk_date"], 11);
-                $dateTime = "(on date {$date} at {$time})";
-                $lastDateTime = substr($element["sk_date"], 0, 15); 
+                $date         = substr($element["sk_date"], 0, 10);
+                $time         = substr($element["sk_date"], 11);
+                $dateTime     = "(on date {$date} at {$time})";
+                $lastDateTime = substr($element["sk_date"], 0, 15);
             } else {
                 $dateTime = "";
             }
-      
-          $historyData.=trim("{$element["speaker"]}:".trim($element["speech"])." $listener $place $dateTime").PHP_EOL;
-          
-        }
-        
-        $partyConf=DataGetCurrentPartyConf();
-		$partyConfA=json_decode($partyConf,true);
-		Logger::debug($partyConf);
-		// Use the global DYNAMIC_PROMPT
-        $updateProfilePrompt = "Write a VERY SHORT sentence (3/4 words) for {$GLOBALS["HERIKA_NAME"]} 
-        to say when she/he reaches Climax based on Dialogue history, and {$GLOBALS["PLAYER_NAME"]} requests,stuttering. Read  {$GLOBALS["HERIKA_NAME"]} character sheet to figure out her sexual preferences.";
-		// Database Prompt (Dynamic Profile Head)    
-		$head[]   = ["role"	=> "system", "content"	=> "You are an NSFW writer.  ", ];
-		
-		// Use centralized function from data_functions.php
-		$currentDynamicProfile = buildDynamicProfileDisplay();
-        
-		$prompt[] = ["role" => "user", "content" => "Current character profile you are generating content for:\n" . "Character name:\n"  . $GLOBALS["HERIKA_NAME"] . "\nCharacter static biography:\n" . $GLOBALS["HERIKA_PERS"] . "\n" . $currentDynamicProfile];
-        $prompt[] = ["role"	=> "user", "content"	=> "* Dialogue history:\n" .$historyData ];
-		$prompt[] = ["role"=> "user", "content"	=> $updateProfilePrompt, ];
-		$contextData       = array_merge($head, $prompt);
 
-         if (isset($GLOBALS["CHIM_CORE_CURRENT_CONNECTOR_DATA"])) {
-            $connector=new LLMConnector();
+            $historyData .= trim("{$element["speaker"]}:" . trim($element["speech"]) . " $listener $place $dateTime") . PHP_EOL;
+
+        }
+
+        $partyConf  = DataGetCurrentPartyConf();
+        $partyConfA = json_decode($partyConf, true);
+        Logger::debug($partyConf);
+        // Use the global DYNAMIC_PROMPT
+        $updateProfilePrompt = "Write a VERY SHORT sentence (3/4 words) for {$GLOBALS["HERIKA_NAME"]}
+        to say when she/he reaches Climax based on Dialogue history, and {$GLOBALS["PLAYER_NAME"]} requests,stuttering. Read  {$GLOBALS["HERIKA_NAME"]} character sheet to figure out her sexual preferences.";
+        // Database Prompt (Dynamic Profile Head)
+        $head[] = ["role" => "system", "content" => "You are an NSFW writer.  "];
+
+        // Use centralized function from data_functions.php
+        $currentDynamicProfile = buildDynamicProfileDisplay();
+
+        $prompt[]    = ["role" => "user", "content" => "Current character profile you are generating content for:\n" . "Character name:\n" . $GLOBALS["HERIKA_NAME"] . "\nCharacter static biography:\n" . $GLOBALS["HERIKA_PERS"] . "\n" . $currentDynamicProfile];
+        $prompt[]    = ["role" => "user", "content" => "* Dialogue history:\n" . $historyData];
+        $prompt[]    = ["role" => "user", "content" => $updateProfilePrompt];
+        $contextData = array_merge($head, $prompt);
+
+        if (isset($GLOBALS["CHIM_CORE_CURRENT_CONNECTOR_DATA"])) {
+            $connector         = new LLMConnector();
             $connectionHandler = $connector->getConnector($GLOBALS["CHIM_CORE_CURRENT_CONNECTOR_DATA"]);
             error_log("[CORE SYSTEM] Using new profile system {$GLOBALS["CHIM_CORE_CURRENT_CONNECTOR_DATA"]["driver"]}/{$GLOBALS["CHIM_CORE_CURRENT_CONNECTOR_DATA"]["model"]}");
         } else {
@@ -646,47 +715,46 @@ function generateClimaxSpeech() {
             return;
         }
 
-        $GLOBALS["FORCE_MAX_TOKENS"]=50;
-		$buffer=$connectionHandler->fast_request($contextData, ["max_tokens"=>50]);
-       
-        $original_speech=" ... Ohh .. ".(strtr(trim($buffer),['"'=>'',"{$GLOBALS["HERIKA_NAME"]}:"=>""]));
+        $GLOBALS["FORCE_MAX_TOKENS"] = 50;
+        $buffer                      = $connectionHandler->fast_request($contextData, ["max_tokens" => 50], "aiagent_nsfw");
 
+        $original_speech = " ... Ohh .. " . (strtr(trim($buffer), ['"' => '', "{$GLOBALS["HERIKA_NAME"]}:" => ""]));
 
-        $GLOBALS["PATCH_DONT_STORE_SPEECH_ON_DB"]=true;
+        $GLOBALS["PATCH_DONT_STORE_SPEECH_ON_DB"] = true;
         unset($GLOBALS["HOOKS"]["XTTS_TEXTMODIFIER"]);
 
-        $GLOBALS["HOOKS"]["XTTS_TEXTMODIFIER"][]=function($text) {
-            
+        $GLOBALS["HOOKS"]["XTTS_TEXTMODIFIER"][] = function ($text) {
+
             $randomStrings = ["  ", "  "];
-            $result = $text;
-    
+            $result        = $text;
+
             // Generate a random index
             $randomIndex = mt_rand(0, count($randomStrings) - 1);
-    
+
             // Split the sentence into an array of words
             $words = explode(' ', $text);
-    
+
             // Select a random word index to insert the random string
             $wordIndex = mt_rand(0, count($words) - 1);
-    
+
             // Insert the random string into the selected word
-            $randomWord = $words[$wordIndex];
+            $randomWord     = $words[$wordIndex];
             $insertPosition = strpos($result, $randomWord);
-            $result = substr_replace($result, $randomStrings[$randomIndex], $insertPosition, 0);
-            error_log("Applying text modifier for XTTS (speed=>0.6) $text => $result ".__FILE__);
-    
-            xtts_fastapi_settings(["temperature"=>1,"speed"=>0.6,"enable_text_splitting"=>false,"top_p"=> 1,"top_k"=>100],true);
+            $result         = substr_replace($result, $randomStrings[$randomIndex], $insertPosition, 0);
+            error_log("Applying text modifier for XTTS (speed=>0.6) $text => $result " . __FILE__);
+
+            xtts_fastapi_settings(["temperature" => 1, "speed" => 0.6, "enable_text_splitting" => false, "top_p" => 1, "top_k" => 100], true);
             return $result;
-    
+
         };
-        returnLines([$original_speech],false);
-        $generatedFile=end($GLOBALS["TRACK"]["FILES_GENERATED"]);
+        returnLines([$original_speech], false);
+        $generatedFile = end($GLOBALS["TRACK"]["FILES_GENERATED"]);
 
-        $intimacyStatus["orgasm_generated"]=true;
-        $intimacyStatus["orgasm_generated_text"]=$original_speech;
-        $intimacyStatus["orgasm_generated_text_original"]=trim(unmoodSentence($original_speech));
+        $intimacyStatus["orgasm_generated"]               = true;
+        $intimacyStatus["orgasm_generated_text"]          = $original_speech;
+        $intimacyStatus["orgasm_generated_text_original"] = trim(unmoodSentence($original_speech));
 
-        updateIntimacyForActor($actor,$intimacyStatus);
+        updateIntimacyForActor($actor, $intimacyStatus);
     } else {
         error_log("Orgams sound already generated");
 

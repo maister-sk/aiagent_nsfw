@@ -24,6 +24,8 @@ if (!isset($intimacyStatus["level"]))
 // Process AIAgentNSFW events
 processInfoSexScene();
 
+processInfoFertility();
+
 // Reload
 $intimacyStatus=getIntimacyForActor($GLOBALS["HERIKA_NAME"]);
 
@@ -134,6 +136,7 @@ if ($intimacyStatus["level"]>0) {
     setSexSpeechStyle($GLOBALS["HERIKA_NAME"]);
 }
 
+error_log("[AIAGENTNSFW ] updateIntimacyForActor({$GLOBALS["HERIKA_NAME"]})".json_encode($intimacyStatus));
 updateIntimacyForActor($GLOBALS["HERIKA_NAME"],$intimacyStatus);        
 
 // Add hook  to XTTS to insert some oh's and ah's into the speech.

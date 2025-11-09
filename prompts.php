@@ -34,9 +34,9 @@ $GLOBALS["PROMPTS"]["chatnf_sl_climax"]=
 $GLOBALS["PROMPTS"]["chatnf_sl_end"]=
 [
     "cue"=>[
-        "(Talk about intimate scene result) {$GLOBALS["TEMPLATE_DIALOG"]}",
-        "(Talk about best moment) {$GLOBALS["TEMPLATE_DIALOG"]}",
-        "(Talk about something people usually talks after sex) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "({$GLOBALS["HERIKA_NAME"]} talks about intimate scene result) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "({$GLOBALS["HERIKA_NAME"]} talks about best sex moment) {$GLOBALS["TEMPLATE_DIALOG"]}",
+        "({$GLOBALS["HERIKA_NAME"]} talks about something people usually talks after sex) {$GLOBALS["TEMPLATE_DIALOG"]}",
     ]
 ];
 

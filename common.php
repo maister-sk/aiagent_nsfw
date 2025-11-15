@@ -189,6 +189,7 @@ function processInfoFertility()
             $extended["fertility_is_pregnant"] = false;
         } else if ($subCmd[1] == "birth") {
             $extended["fertility_is_pregnant"] = false;
+            $extended["fertility_recent_birth"] = $gameRequest[2];
         }
 
         $npcData["extended_data"] = json_encode($extended);
@@ -227,9 +228,13 @@ function getIntimacyForActor($actorName)
 }
 
 /*
- Custom SpeechStyle prompt to use when in intimacy scene
- extended_data->sex_speech_style
+ Make AI aware this NPC has given birth a child recently
 */
+
+function setBirthPrompt($actorName)
+{
+    $GLOBALS["HERIKA_PERSONALITY"].="\nImportant: {$actorName} had a child recently, (out of context, check 'Baby' item on inventory/equipment, this means $actorName is carrying the baby";
+}
 
 function setSexSpeechStyle($actorName)
 {

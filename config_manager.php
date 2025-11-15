@@ -48,9 +48,176 @@
         handleLoadSettings();
     } elseif ($action === 'saveSettings') {
         handleSaveSettings();
+    } elseif ($action === 'generateTable') {
+        handleGenerateTable();
+    } elseif ($action === 'importData') {
+        handleImportData();
     }
 
     // CRUD Functions
+    function handleImportData()
+    {
+        try {
+            if (!isset($_FILES['importFile']) || $_FILES['importFile']['error'] !== UPLOAD_ERR_OK) {
+                throw new Exception('No file uploaded or upload error');
+            }
+
+            $file = $_FILES['importFile']['tmp_name'];
+            if (!is_readable($file)) {
+                throw new Exception('Cannot read uploaded file');
+            }
+
+            $lines = file($file, FILE_SKIP_EMPTY_LINES);
+            if (empty($lines)) {
+                throw new Exception('File is empty');
+            }
+
+            // Parse header row
+            $headerLine = trim($lines[0]);
+            $headers = str_getcsv($headerLine, "\t", '"');
+            $headers = array_map('trim', $headers);
+
+            if (empty($headers) || !in_array('stage', $headers)) {
+                throw new Exception('Invalid file format: missing "stage" field in header');
+            }
+
+            $importedCount = 0;
+            $skippedCount = 0;
+            $errors = [];
+
+            // Process data rows
+            for ($i = 1; $i < count($lines); $i++) {
+                try {
+                    $dataLine = trim($lines[$i]);
+                    if (empty($dataLine)) {
+                        continue;
+                    }
+
+                    $values = str_getcsv($dataLine, "\t", '"');
+                    $values = array_map('trim', $values);
+
+                    if (count($values) !== count($headers)) {
+                        $skippedCount++;
+                        continue;
+                    }
+
+                    // Create associative array
+                    $row = array_combine($headers, $values);
+
+                    // Handle \N as NULL
+                    foreach ($row as $key => $value) {
+                        if ($value === '\N' || $value === 'NULL' || $value === 'null') {
+                            $row[$key] = null;
+                        }
+                    }
+
+                    if (empty($row['stage'])) {
+                        $skippedCount++;
+                        continue;
+                    }
+
+                    // Only include valid columns
+                    $validColumns = ['stage', 'description', 'description_es', 'description_en', 'i_desc'];
+                    $insertData = [];
+                    foreach ($validColumns as $col) {
+                        if (isset($row[$col])) {
+                            $insertData[$col] = $row[$col];
+                        }
+                    }
+
+                    // Insert or update the row
+                    try {
+                        $GLOBALS["db"]->insert('ext_aiagentnsfw_scenes', $insertData);
+                        $importedCount++;
+                    } catch (Exception $insertError) {
+                        // Check if it's a duplicate key error, if so try updating
+                        if (strpos($insertError->getMessage(), 'duplicate') !== false || 
+                            strpos($insertError->getMessage(), 'unique') !== false ||
+                            strpos($insertError->getMessage(), 'already exists') !== false) {
+                            
+                            $set = [];
+                            foreach (['description', 'description_es', 'description_en', 'i_desc'] as $col) {
+                                if (isset($insertData[$col])) {
+                                    $val = is_null($insertData[$col]) ? 'NULL' : "'" . $GLOBALS["db"]->escape($insertData[$col]) . "'";
+                                    $set[] = "$col=$val";
+                                }
+                            }
+
+                            if (!empty($set)) {
+                                $setStr = implode(', ', $set);
+                                $where = "stage='" . $GLOBALS["db"]->escape($insertData['stage']) . "'";
+                                $GLOBALS["db"]->update('ext_aiagentnsfw_scenes', $setStr, $where);
+                                $importedCount++;
+                            } else {
+                                $skippedCount++;
+                            }
+                        } else {
+                            throw $insertError;
+                        }
+                    }
+                } catch (Exception $rowError) {
+                    $errors[] = "Row " . ($i + 1) . ": " . $rowError->getMessage();
+                }
+            }
+
+            $message = "Import completed. Imported/Updated: $importedCount, Skipped: $skippedCount";
+            if (!empty($errors)) {
+                $message .= ". Errors: " . implode("; ", array_slice($errors, 0, 5));
+                if (count($errors) > 5) {
+                    $message .= " (and " . (count($errors) - 5) . " more)";
+                }
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => $message,
+                'imported' => $importedCount,
+                'skipped' => $skippedCount,
+                'errors' => $errors,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+        exit;
+    }
+    function handleGenerateTable()
+    {
+        try {
+            $sql = <<<SQL
+CREATE TABLE IF NOT EXISTS public.ext_aiagentnsfw_scenes (
+    stage text NOT NULL,
+    description text,
+    description_es text,
+    description_en text,
+    i_desc text
+);
+
+ALTER TABLE public.ext_aiagentnsfw_scenes OWNER TO dwemer;
+
+COMMENT ON TABLE public.ext_aiagentnsfw_scenes IS 'ostim scenes descriptions';
+
+ALTER TABLE ONLY public.ext_aiagentnsfw_scenes
+    ADD CONSTRAINT ext_aiagentnsfw_scenes_pkey PRIMARY KEY (stage);
+SQL;
+
+            // Execute the SQL statement
+            $GLOBALS["db"]->query($sql);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Table ext_aiagentnsfw_scenes created successfully',
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+        exit;
+    }
     function handleRead()
     {
         try {
@@ -61,9 +228,31 @@
                 'data'    => $results,
             ]);
         } catch (Exception $e) {
+            // Check if the table exists
+            $tableExistsQuery = "SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'ext_aiagentnsfw_scenes'
+            )";
+            
+            $tableExists = false;
+            try {
+                $result = $GLOBALS["db"]->fetchOne($tableExistsQuery);
+                $tableExists = isset($result[0]) ? (bool)$result[0] : false;
+            } catch (Exception $checkException) {
+                // If we can't check, assume table doesn't exist
+                $tableExists = false;
+            }
+            
+            $errorMessage = $e->getMessage();
+            if (!$tableExists) {
+                $errorMessage .= ' [TABLE NOT FOUND: Please create the ext_aiagentnsfw_scenes table first using the "Generate ext_aiagentnsfw_scenes Table" button in Settings]';
+            }
+            
             echo json_encode([
                 'success' => false,
-                'error'   => $e->getMessage(),
+                'error'   => $errorMessage,
+                'tableExists' => $tableExists,
             ]);
         }
         exit;
@@ -661,6 +850,59 @@
             padding-bottom:20px;;
             padding-top:20px;
         }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pagination button,
+        .pagination span {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            background: white;
+            color: #333;
+            transition: all 0.2s ease;
+        }
+
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            font-weight: 600;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination span {
+            cursor: default;
+            border: none;
+            padding: 8px 0;
+        }
+
+        .pagination-info {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #666;
+        }
+
         @media (max-width: 768px) {
             .row {
                 grid-template-columns: 1fr;
@@ -687,6 +929,7 @@
             <button class="tab-button active" onclick="switchTab('scenes')">📋 Scenes Manager</button>
             <button class="tab-button" onclick="switchTab('tools')">🛠️ Tools</button>
             <button class="tab-button" onclick="switchTab('settings')">⚙️ Settings</button>
+            <button class="tab-button" onclick="switchTab('info')">ℹ️ Info</button>
         </div>
 
         <!-- Scenes Tab -->
@@ -754,6 +997,10 @@
                     </tbody>
                 </table>
             </div>
+            <div id="paginationContainer" style="display: none;">
+                <div class="pagination" id="paginationControls"></div>
+                <div class="pagination-info" id="paginationInfo"></div>
+            </div>
         </div>
 
         <!-- Tools Tab -->
@@ -762,7 +1009,7 @@
             <div class="alert error" id="toolsErrorAlert"></div>
 
             <h2 style="margin-bottom: 20px; color: #333;">NPC Prompt Generator</h2>
-            <p class="legend">This a tool to set extended NPC properties that will apply on intimate Scenes only. Changes here can be edited no NPC sheet too, on extended data. Use The generate buttons to use teh selected connector to generate content</p>
+            <p class="legend">This a tool to set extended NPC properties that will apply on intimate Scenes only. Changes here can be edited on NPC sheet too, on extended data. Use The generate buttons to use the selected connector to generate content</p>
             <div class="form-group">
                 <label for="npcSelect">Select NPC *</label>
                 <div class="searchable-select-wrapper">
@@ -872,9 +1119,112 @@
                 </div>
             </div>
 
+            <h2 style="margin: 30px 0 20px; color: #333;">Database Management</h2>
+
+            <h3 style="margin: 20px 0 15px; color: #555; font-size: 15px;">Generate Table</h3>
+            <p class="legend">Create the ext_aiagentnsfw_scenes table in the database if it doesn't exist.</p>
             <div class="button-group">
-                <button class="btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+                <button class="btn-warning" onclick="generateTable()">📊 Generate ext_aiagentnsfw_scenes Table</button>
+            </div>
+
+            <h3 style="margin: 20px 0 15px; color: #555; font-size: 15px;">Import Scenes from File</h3>
+            <p class="legend">Import scenes from a tab-separated file with quoted fields. First row should contain field names: stage, description, description_es, description_en, i_desc. Use \N for NULL values.</p>
+            <div class="form-group">
+                <label for="importFile">Select TSV File</label>
+                <input type="file" id="importFile" accept=".tsv,.txt" />
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="importScenes()">� Import Scenes</button>
+            </div>
+
+            <h3 style="margin: 20px 0 15px; color: #555; font-size: 15px;">Settings</h3>
+            <div class="button-group">
+                <button class="btn-primary" onclick="saveSettings()">� Save Settings</button>
                 <button class="btn-secondary" onclick="resetSettings()">🔄 Reload Settings</button>
+            </div>
+        </div>
+
+        <!-- Info Tab -->
+        <div id="info" class="tab-content">
+            <h2 style="margin-bottom: 20px; color: #333;">📚 NSFW Agent Documentation</h2>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Overview</h3>
+            <p style="line-height: 1.6; color: #666; margin-bottom: 15px;">
+                This extension integrates intimate content with Ostim animations. NPCs become aware of player ostim scenes and can perform adult actions. 
+                By default, actions are not available and are progressively enabled as the NPC's <strong>sex_disposal</strong> property increases through seduction gameplay and relaxing status.
+            </p>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Core Concepts</h3>
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                <p><strong>Animation Types:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px; color: #666;">
+                    <li>NPCs can start animations directly</li>
+                    <li>NPCs can initiate idle scenes</li>
+                    <li>NPCs can change animations based on chat interaction</li>
+                </ul>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">NPC Extended Data</h3>
+            <p style="color: #666; margin-bottom: 10px;">Extended NPC data stores intimate status and properties:</p>
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 5px; margin-bottom: 15px; font-family: monospace; font-size: 12px; color: #333; border: 1px solid #ddd; overflow-x: auto;">
+                <div><strong>aiagent_nsfw_intimacy_data:</strong> {</div>
+                <div style="margin-left: 20px;">
+                    <div><strong>level:</strong> 0-2 (0: not in scene, 1: idle scene, 2: active scene)</div>
+                    <div><strong>is_naked:</strong> 0|1 (tracks PutOffClothes/PutOnClothes actions)</div>
+                    <div><strong>orgasmed:</strong> boolean (true if NPC climaxed in session)</div>
+                    <div><strong>sex_disposal:</strong> 0-100 (above 10, sex actions become available)</div>
+                    <div><strong>orgasm_generated:</strong> boolean (precached climax speech)</div>
+                    <div><strong>orgasm_generated_text:</strong> string (generated climax dialogue)</div>
+                    <div><strong>adult_entertainment_services_autodetected:</strong> boolean (sexual worker marker)</div>
+                </div>
+                <div>}</div>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">NPC Configuration</h3>
+            <p style="color: #666; margin-bottom: 10px;">Two key extended NPC properties:</p>
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                <p><strong>sex_prompt:</strong> Prompt used when NPC is in an ostim scene (configure in Tools tab)</p>
+                <p style="margin-top: 10px;"><strong>sex_speech_style:</strong> Speech style for adult dialogue (configure in Tools tab)</p>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Importing Rules</h3>
+            <p style="color: #666; margin-bottom: 10px;">Automate NPC categorization through import rules. Example - assign all females from "Ancient Profession" mod to profile 6:</p>
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 5px; margin-bottom: 15px; font-family: monospace; font-size: 11px; color: #333; border: 1px solid #ddd; overflow-x: auto;">
+                <div>id | description | match_name | match_race | match_gender | match_base | match_mods | action | profile | priority | enabled</div>
+                <div style="margin-top: 5px; border-top: 1px solid #ddd; padding-top: 5px;">
+                    2 | Ancient Profession | .* | .* | female | .* | {prostitutes.esp} | {"metadata": {"rule_applied": true}} | 6 | 1 | TRUE
+                </div>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Profile Configuration</h3>
+            <p style="color: #666; margin-bottom: 10px;">At the target profile (e.g., profile 6), set metadata properties:</p>
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 5px; margin-bottom: 15px; font-family: monospace; font-size: 12px; color: #333; border: 1px solid #ddd;">
+                <div><strong>AIAGENT_NSFW_DEFAULT_AROUSAL:</strong> 20</div>
+                <div style="margin-top: 10px; color: #666;">All NPCs under this profile have base arousal of 20, enabling all sex actions. Use Profile Prompt to provide context:</div>
+                <div style="margin-top: 10px; background: #fff; padding: 10px; border-radius: 3px; border-left: 3px solid #667eea;">
+                    <div>#HERIKA_NAME# is a sex worker. Offers adult entertainment services for gold:</div>
+                    <div style="margin-top: 5px; color: #666;">• massage: 50 gold</div>
+                    <div>• manual: 100 gold</div>
+                    <div>• pectoral job: 150 gold</div>
+                    <div>• mouth job: 200 gold</div>
+                    <div>• love: 500 gold</div>
+                </div>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Roadmap</h3>
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107; color: #333;">
+                <p><strong>Planned Features:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Multi-NPC intimate scenes</li>
+                    <li>Non-player character scenes</li>
+                </ul>
+            </div>
+
+            <h3 style="margin: 25px 0 15px; color: #555; font-size: 16px;">Quick Links</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                <button class="btn-secondary" onclick="switchTab('scenes')" style="cursor: pointer;">📋 Go to Scenes Manager</button>
+                <button class="btn-secondary" onclick="switchTab('tools')" style="cursor: pointer;">🛠️ Go to Tools</button>
+                <button class="btn-secondary" onclick="switchTab('settings')" style="cursor: pointer;">⚙️ Go to Settings</button>
             </div>
         </div>
     </div>
@@ -917,6 +1267,11 @@
     </div>
 
     <script>
+        // Pagination variables
+        let allScenes = [];
+        let currentPage = 1;
+        const itemsPerPage = 50;
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             loadScenes();
@@ -953,7 +1308,7 @@
 
             setTimeout(() => {
                 alertEl.style.display = 'none';
-            }, 4000);
+            }, 10000);
         }
 
         // Load scenes
@@ -964,31 +1319,9 @@
                     document.getElementById('scenesLoading').classList.remove('active');
 
                     if (data.success) {
-                        const tbody = document.getElementById('scenesTableBody');
-                        tbody.innerHTML = '';
-
-                        if (data.data.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No scenes found. Create one to get started!</td></tr>';
-                        } else {
-                            data.data.forEach(scene => {
-                                const row = document.createElement('tr');
-                                row.innerHTML = `
-                                    <td><strong>${escapeHtml(scene.stage)}</strong></td>
-                                    <td>${escapeHtml(scene.description || '-')}</td>
-                                    <td>${escapeHtml(scene.description_es || '-')}</td>
-                                    <td>${escapeHtml(scene.description_en || '-')}</td>
-                                    <td>${escapeHtml(scene.i_desc || '-')}</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="btn-warning" onclick="editScene('${escapeAttr(scene.stage)}', '${escapeAttr(scene.description || '')}', '${escapeAttr(scene.description_es || '')}', '${escapeAttr(scene.description_en || '')}', '${escapeAttr(scene.i_desc || '')}')">✏️ Edit</button>
-                                            <button class="btn-danger" onclick="deleteScene('${escapeAttr(scene.stage)}')">🗑️ Delete</button>
-                                        </div>
-                                    </td>
-                                `;
-                                tbody.appendChild(row);
-                            });
-                        }
-                        document.getElementById('scenesTable').style.display = 'table';
+                        allScenes = data.data;
+                        currentPage = 1;
+                        displayScenesPage();
                     } else {
                         showAlert('sceneErrorAlert', 'Error loading scenes: ' + data.error, 'error');
                     }
@@ -997,6 +1330,140 @@
                     document.getElementById('scenesLoading').classList.remove('active');
                     showAlert('sceneErrorAlert', 'Network error: ' + error.message, 'error');
                 });
+        }
+
+        // Display scenes for current page
+        function displayScenesPage() {
+            const tbody = document.getElementById('scenesTableBody');
+            tbody.innerHTML = '';
+
+            if (allScenes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No scenes found. Create one to get started!</td></tr>';
+                document.getElementById('scenesTable').style.display = 'table';
+                document.getElementById('paginationContainer').style.display = 'none';
+                return;
+            }
+
+            // Calculate pagination
+            const totalPages = Math.ceil(allScenes.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, allScenes.length);
+            const scenesOnPage = allScenes.slice(startIndex, endIndex);
+
+            // Populate table
+            scenesOnPage.forEach(scene => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${escapeHtml(scene.stage)}</strong></td>
+                    <td>${escapeHtml(scene.description || '-')}</td>
+                    <td>${escapeHtml(scene.description_es || '-')}</td>
+                    <td>${escapeHtml(scene.description_en || '-')}</td>
+                    <td>${escapeHtml(scene.i_desc || '-')}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-warning" onclick="editScene('${escapeAttr(scene.stage)}', '${escapeAttr(scene.description || '')}', '${escapeAttr(scene.description_es || '')}', '${escapeAttr(scene.description_en || '')}', '${escapeAttr(scene.i_desc || '')}')">✏️ Edit</button>
+                            <button class="btn-danger" onclick="deleteScene('${escapeAttr(scene.stage)}')">🗑️ Delete</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('scenesTable').style.display = 'table';
+
+            // Show pagination controls
+            if (totalPages > 1) {
+                document.getElementById('paginationContainer').style.display = 'block';
+                renderPagination(totalPages);
+            } else {
+                document.getElementById('paginationContainer').style.display = 'none';
+            }
+
+            // Update pagination info
+            document.getElementById('paginationInfo').textContent = 
+                `Showing ${startIndex + 1}-${endIndex} of ${allScenes.length} scenes (Page ${currentPage}/${totalPages})`;
+        }
+
+        // Render pagination controls
+        function renderPagination(totalPages) {
+            const paginationControls = document.getElementById('paginationControls');
+            paginationControls.innerHTML = '';
+
+            // Previous button
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← Previous';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    displayScenesPage();
+                }
+            };
+            paginationControls.appendChild(prevBtn);
+
+            // Page numbers
+            const maxVisiblePages = 7;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            if (startPage > 1) {
+                const firstBtn = document.createElement('button');
+                firstBtn.textContent = '1';
+                firstBtn.onclick = () => {
+                    currentPage = 1;
+                    displayScenesPage();
+                };
+                paginationControls.appendChild(firstBtn);
+
+                if (startPage > 2) {
+                    const dots = document.createElement('span');
+                    dots.textContent = '...';
+                    paginationControls.appendChild(dots);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.className = i === currentPage ? 'active' : '';
+                btn.onclick = () => {
+                    currentPage = i;
+                    displayScenesPage();
+                };
+                paginationControls.appendChild(btn);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const dots = document.createElement('span');
+                    dots.textContent = '...';
+                    paginationControls.appendChild(dots);
+                }
+
+                const lastBtn = document.createElement('button');
+                lastBtn.textContent = totalPages;
+                lastBtn.onclick = () => {
+                    currentPage = totalPages;
+                    displayScenesPage();
+                };
+                paginationControls.appendChild(lastBtn);
+            }
+
+            // Next button
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = 'Next →';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.onclick = () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    displayScenesPage();
+                }
+            };
+            paginationControls.appendChild(nextBtn);
         }
 
         // Create scene
@@ -1137,6 +1604,43 @@
                     setTimeout(() => {
                         location.reload();
                     }, 1500);
+                } else {
+                    showAlert('sceneErrorAlert', 'Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                hideProcessing();
+                showAlert('sceneErrorAlert', 'Network error: ' + error.message, 'error');
+            });
+        }
+
+        // Import Scenes from File
+        function importScenes() {
+            const fileInput = document.getElementById('importFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showAlert('sceneErrorAlert', 'Please select a file to import', 'error');
+                return;
+            }
+
+            if (!confirm('Import scenes from file? Duplicate scenes will be updated.')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('importFile', fileInput.files[0]);
+
+            showProcessing();
+            fetch('<?php echo $_SERVER['PHP_SELF']; ?>?action=importData', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProcessing();
+                if (data.success) {
+                    showAlert('sceneSuccessAlert', data.message, 'success');
+                    fileInput.value = ''; // Clear file input
+                    loadScenes();
                 } else {
                     showAlert('sceneErrorAlert', 'Error: ' + (data.error || 'Unknown error'), 'error');
                 }
@@ -1500,8 +2004,31 @@
             loadSettings();
         }
 
-        function showProcessing()
-        {
+        // Generate Table
+        function generateTable() {
+            if (!confirm('Create the ext_aiagentnsfw_scenes table? This will set up the database table for storing scene data.')) {
+                return;
+            }
+
+            showProcessing();
+            fetch('<?php echo $_SERVER['PHP_SELF']; ?>?action=generateTable', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProcessing();
+                if (data.success) {
+                    showAlert('settingsSuccessAlert', data.message, 'success');
+                } else {
+                    showAlert('settingsErrorAlert', 'Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                hideProcessing();
+                showAlert('settingsErrorAlert', 'Network error: ' + error.message, 'error');
+            });
+        }
+        function showProcessing(){
 
             processingMessage                           = document . createElement('div');
             processingMessage . textContent             = 'Processing...';

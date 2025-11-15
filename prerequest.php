@@ -136,6 +136,15 @@ if ($intimacyStatus["level"]>0) {
     setSexSpeechStyle($GLOBALS["HERIKA_NAME"]);
 }
 
+if (isset($extended_data["fertility_recent_birth"])) {
+    error_log("[AIAGENT NSFW] Checking fertility_recent_birth");
+    if (($gameRequest[2]-$extended_data["fertility_recent_birth"]) < (7 * 24 / 0.0000024)) {
+        error_log("[AIAGENT NSFW] setBirthPrompt fertility_recent_birth");
+        setBirthPrompt($GLOBALS["HERIKA_NAME"]);
+    }
+}
+
+
 error_log("[AIAGENTNSFW ] updateIntimacyForActor({$GLOBALS["HERIKA_NAME"]})".json_encode($intimacyStatus));
 updateIntimacyForActor($GLOBALS["HERIKA_NAME"],$intimacyStatus);        
 

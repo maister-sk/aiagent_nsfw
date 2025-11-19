@@ -104,8 +104,10 @@ if (strpos($currentTask,"relax")!==false) {
 // Speech mood modifier
 
 $moodModif=getSexDisposalFromMood($GLOBALS["HERIKA_NAME"],$GLOBALS["gameRequest"][2]);
-if ($moodModif>0.45) 
-    $intimacyStatus["sex_disposal"]+=2;
+if ($moodModif>0.25) {
+    error_log("[AIAGENT NSFW] increasing sex_disposal for {$GLOBALS["HERIKA_NAME"]}");
+    $intimacyStatus["sex_disposal"]+=3;
+}
 else if ($moodModif<0) 
     $intimacyStatus["sex_disposal"]-=2;
 

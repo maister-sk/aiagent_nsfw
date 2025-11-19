@@ -932,6 +932,7 @@ if (isset($GLOBALS["gameRequest"]) && $GLOBALS["gameRequest"][0]!="instruction" 
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdPutOnClothes";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdConsumeSoul";
     $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdStartHandJobSex";
+    $GLOBALS["ENABLED_FUNCTIONS"][]="ExtCmdSexCommand";
 
     error_log("[AIAGENTNSFW] All functions available");
 }

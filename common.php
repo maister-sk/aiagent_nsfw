@@ -294,17 +294,45 @@ function updateIntimacyForActor($actorName, $idata)
     $currentIntimacy = getIntimacyForActor($actorName);
     $npcManager      = new NpcMaster();
     $npcData         = $npcManager->getByName($actorName);
+    $metadata       = $npcManager->getMetadata($npcData);
 
     if (! $npcData) {
         $npcData = $npcManager->getByName(ucFirst(strtolower($actorName)));
     }
 
+    
     $extended = json_decode($npcData["extended_data"], true);
+
+    // Update timestamp on level change
+    if ($extended["aiagent_nsfw_intimacy_data"]["level"]!=$idata["level"]) {
+        $npcData["gamets_last_updated"]=$GLOBALS["gameRequest"][2];
+        error_log("[AIAGENTNSFW] Updating timestamp as level changed");
+    } else {
+        error_log("[AIAGENTNSFW] No change {$extended["aiagent_nsfw_intimacy_data"]["level"]} {$idata["level"]}");
+    }
 
     if (isset($extended["aiagent_nsfw_intimacy_data"]) && isNonEmptyArray($extended["aiagent_nsfw_intimacy_data"])) {
         $extended["aiagent_nsfw_intimacy_data"] = array_merge($extended["aiagent_nsfw_intimacy_data"], $idata);
     } else {
         $extended["aiagent_nsfw_intimacy_data"] = $idata;
+    }
+
+    
+
+    // Naked check from inventory
+    if (!empty($metadata["equipment"]["armor"])) {
+        if  ($extended["aiagent_nsfw_intimacy_data"]["is_naked"]==2) {
+            if ($extended["aiagent_nsfw_intimacy_data"]["is_naked_check"]>2) {
+                $extended["aiagent_nsfw_intimacy_data"]["is_naked"]=0;
+                $extended["aiagent_nsfw_intimacy_data"]["is_naked_check"]=0;
+                error_log("[AIAGENTNSFW] Forcing no naked for $actorName because is_naked_check");
+
+            } else {
+                $extended["aiagent_nsfw_intimacy_data"]["is_naked_check"]++;
+                error_log("[AIAGENTNSFW] Naked check {$extended["aiagent_nsfw_intimacy_data"]["is_naked_check"]}");
+            }
+
+        }
     }
 
     $npcData["extended_data"] = json_encode($extended);
@@ -421,7 +449,7 @@ GROUP BY speaker, listener
 ORDER BY total_sentiment DESC";
 
     $statData = $GLOBALS["db"]->fetchOne($sdQuery);
-    error_log("[AIGANET NSFW] Mood speech analisys: " . json_encode($statData));
+    error_log("[AIAGENT NSFW] Mood speech analisys: $actorName: " . json_encode($statData));
     if (isNonEmptyArray($statData)) {
         return $statData["avg_sentiment"];
 
@@ -446,7 +474,7 @@ function getLastIssuedMood($actorName, $currentGamets, $timeFrameLimit = 5)
     order by gamets DESC
     limit 1";
     $statData = $GLOBALS["db"]->fetchOne($sdQuery);
-    error_log("Last mood: " . json_encode($statData) . "<$sdQuery>");
+    error_log("Last mood for $actorName: " . json_encode($statData) . "<$sdQuery>");
     if (isNonEmptyArray($statData)) {
         return $statData["mood"];
 
@@ -473,7 +501,9 @@ function findRowByFirstColumn($filePath, $searchValue)
     }
 
     // Insert for further description
-    $desc=$GLOBALS["db"]->insert("public.ext_aiagentnsfw_scenes",["stage"=>$searchValue]);
+    if (!isset($desc["stage"])) {
+        $desc=$GLOBALS["db"]->insert("public.ext_aiagentnsfw_scenes",["stage"=>$searchValue]);
+    }
 
     return null; // No match found
 }
